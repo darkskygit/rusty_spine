@@ -24,11 +24,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-        # libasound2-dev is required to build bevy, which is a dev dependency
+
       - name: Install required packages
-        run: sudo apt-get install libasound2-dev
+        run: sudo apt-get install libasound2-dev libudev-dev
         # Always use the draw_functions feature - the examples don't build without it, causing the test step to fail.
+
       - name: Build
         run: cargo build --verbose --no-default-features --features draw_functions ${{ matrix.version_feature }} ${{ matrix.use_libc_feature }} ${{ matrix.egui_debugger_feature }} ${{ matrix.mint_feature }}
+
       - name: Run tests
         run: cargo test --verbose --no-default-features --features draw_functions ${{ matrix.version_feature }} ${{ matrix.use_libc_feature }} ${{ matrix.egui_debugger_feature }} ${{ matrix.mint_feature }}
