@@ -168,8 +168,8 @@ mod tests {
                 write!(d, "frame {} slot {}", frame, renderable.slot_index)?;
                 write!(d, " blend={}", renderable.blend_mode as i32)?;
                 write!(d, " pma={}", renderable.premultiplied_alpha)?;
-                write!(d, " color=({:.5},{:.5},{:.5},{:.5})", renderable.color.r, renderable.color.g, renderable.color.b, renderable.color.a)?;
-                write!(d, " dark=({:.5},{:.5},{:.5},{:.5})", renderable.dark_color.r, renderable.dark_color.g, renderable.dark_color.b, renderable.dark_color.a)?;
+                write!(d, " color=({:.4},{:.4},{:.4},{:.4})", renderable.color.r, renderable.color.g, renderable.color.b, renderable.color.a)?;
+                write!(d, " dark=({:.4},{:.4},{:.4},{:.4})", renderable.dark_color.r, renderable.dark_color.g, renderable.dark_color.b, renderable.dark_color.a)?;
 
                 write!(d, "\nframe {} slot {} indices", frame, renderable.slot_index)?;
                 for index in renderable.indices {
@@ -178,12 +178,12 @@ mod tests {
 
                 write!(d, "\nframe {} slot {} vertices", frame, renderable.slot_index)?;
                 for vertex in renderable.vertices {
-                    write!(d, " {:.5} {:.5}", vertex[0], vertex[1])?;
+                    write!(d, " {:.0} {:.0}", vertex[0], vertex[1])?;
                 }
 
                 write!(d, "\nframe {} slot {} uvs", frame, renderable.slot_index)?;
                 for uv in renderable.uvs {
-                    write!(d, " {:.5} {:.5}", uv[0], uv[1])?;
+                    write!(d, " {:.4} {:.4}", uv[0], uv[1])?;
                 }
 
                 write!(d, "\n")?;
