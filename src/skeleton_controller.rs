@@ -118,3 +118,79 @@ pub struct SkeletonRenderable {
     pub premultiplied_alpha: bool,
     pub attachment_renderer_object: Option<*const c_void>,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader, Write};
+    use crate::SkeletonController;
+    use crate::tests::test_spineboy_instance_data;
+
+    #[test]
+    fn test_generated_data_skeletoncontroller() {
+        let reference_filename = if cfg!(feature="spine38") {
+            "assets/test-reference-files/simple_drawer.spineboy_spine38"
+        } else {
+            "assets/test-reference-files/simple_drawer.spineboy_spine41"
+        };
+
+        let (skeleton_data, animation_state_data) = test_spineboy_instance_data();
+        let mut controller = SkeletonController::new(skeleton_data, animation_state_data);
+        let generated_data = generate_test_data(&mut controller, "run", 0.05, 60).unwrap();
+
+        if env::var("GENERATE_TEST_REFERENCE_FILES").is_ok() {
+            eprintln!("Generating test reference file {}", reference_filename);
+            let mut reference_file = File::create(reference_filename).unwrap();
+            reference_file.write(generated_data.as_slice()).unwrap();
+        } else {
+            let reference_file = BufReader::new(File::open(reference_filename).unwrap());
+            for (reference_line, test_line) in reference_file.lines().zip(generated_data.lines()) {
+                let reference_line = reference_line.unwrap();
+                let test_line = test_line.unwrap();
+                assert_eq!(reference_line, test_line);
+            }
+        }
+    }
+
+    fn generate_test_data(
+        controller: &mut SkeletonController,
+        animation_name: &str,
+        delta_seconds: f32,
+        frame_count: i32
+    ) -> std::io::Result<Vec<u8>> {
+        controller.animation_state.set_animation_by_name(0, animation_name, true).unwrap();
+
+        let mut d = Vec::new();
+
+        for frame in 0..frame_count {
+            for renderable in controller.renderables() {
+                write!(d, "frame {} slot {}", frame, renderable.slot_index)?;
+                write!(d, " blend={}", renderable.blend_mode as i32)?;
+                write!(d, " pma={}", renderable.premultiplied_alpha)?;
+                write!(d, " color=({:.4},{:.4},{:.4},{:.4})", renderable.color.r, renderable.color.g, renderable.color.b, renderable.color.a)?;
+                write!(d, " dark=({:.4},{:.4},{:.4},{:.4})", renderable.dark_color.r, renderable.dark_color.g, renderable.dark_color.b, renderable.dark_color.a)?;
+
+                write!(d, "\nframe {} slot {} indices", frame, renderable.slot_index)?;
+                for index in renderable.indices {
+                    write!(d, " {}", index)?;
+                }
+
+                write!(d, "\nframe {} slot {} vertices", frame, renderable.slot_index)?;
+                for vertex in renderable.vertices {
+                    write!(d, " {:.0} {:.0}", vertex[0], vertex[1])?;
+                }
+
+                write!(d, "\nframe {} slot {} uvs", frame, renderable.slot_index)?;
+                for uv in renderable.uvs {
+                    write!(d, " {:.4} {:.4}", uv[0], uv[1])?;
+                }
+
+                write!(d, "\n")?;
+            }
+            controller.update(delta_seconds);
+        }
+
+        Ok(d)
+    }
+}
