@@ -35,13 +35,15 @@
 #[macro_use]
 pub mod c_interface;
 pub mod c;
-pub mod debugger;
 pub mod extension;
 
 #[cfg(feature = "draw_functions")]
 pub mod controller;
 #[cfg(feature = "draw_functions")]
 pub mod draw;
+
+#[cfg(feature = "egui_debugger")]
+pub mod debugger;
 
 mod animation;
 mod animation_state;

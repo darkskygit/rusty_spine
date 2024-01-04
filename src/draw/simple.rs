@@ -1,7 +1,4 @@
-use crate::{
-    c::{c_void, spSkeletonClipping_clipTriangles},
-    BlendMode, Color, Skeleton, SkeletonClipping,
-};
+use crate::{c::c_void, BlendMode, Color, Skeleton, SkeletonClipping};
 
 #[cfg(feature = "spine38")]
 use crate::c::spMeshAttachment_updateUVs;

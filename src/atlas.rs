@@ -155,8 +155,6 @@ pub mod atlas {
     //!
     //! To load an atlas file, see [`Atlas`].
 
-    use crate::c_interface::from_c_str;
-
     use super::*;
 
     /// Settings for an atlas backing texture contained in [`Atlas`].

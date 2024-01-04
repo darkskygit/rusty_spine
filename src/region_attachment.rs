@@ -81,7 +81,7 @@ impl RegionAttachment {
         stride: i32,
     ) {
         spRegionAttachment_computeWorldVertices(
-            self.c_ptr() as *const spRegionAttachment as *mut spRegionAttachment,
+            self.c_ptr().cast_const().cast_mut(),
             bone.c_ptr(),
             vertices.as_mut_ptr(),
             offset,

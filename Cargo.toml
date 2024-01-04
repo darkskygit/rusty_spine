@@ -10,10 +10,14 @@ license-file = "LICENSE"
 exclude = ["assets/*"]
 
 [dependencies]
+egui = { version = "0.19", optional = true }
+egui_extras = { version = "0.19", optional = true }
 libc = { version = "0.2", optional = true }
 mint = { version = "0.5", optional = true }
 
 [dev-dependencies]
+bevy = "0.8"
+bevy_egui = "0.16"
 miniquad = "0.3.16"
 image = { version = "0.24", default-features = false, features = [
     "png",
@@ -30,6 +34,7 @@ opt-level = 3
 default = ["draw_functions", "mint", "spine38"]
 draw_functions = []
 spine38 = []
+egui_debugger = ["egui", "egui_extras"]
 
 [workspace]
 resolver = "2"
