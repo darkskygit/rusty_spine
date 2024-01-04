@@ -32,12 +32,12 @@ pub fn replace_identifier(
         let before_is_alphanumeric = src_index != 0
             && src[src_index - 1..]
                 .chars()
-                .nth(0)
+                .next()
                 .map_or(false, |c| c.is_alphanumeric() || c == '_');
         let after_is_alphanumeric = src_index + identifier.len() < src.len()
             && src[(src_index + identifier.len())..]
                 .chars()
-                .nth(0)
+                .next()
                 .map_or(false, |c| c.is_alphanumeric() || c == '_');
         if !before_is_alphanumeric && !after_is_alphanumeric {
             let new_src = String::from(&src[0..src_index])
@@ -92,13 +92,13 @@ pub fn run() {
 
 pub fn checks() {
     if !Path::new(&spine_c_dir()).is_dir() {
-        println!("");
+        println!();
         println!(
             "Spine source not found. Please checkout spine-runtimes in the transpiler directory."
         );
-        println!("");
+        println!();
         println!("git clone https://github.com/EsotericSoftware/spine-runtimes.git");
-        println!("");
+        println!();
         panic!();
     }
 }
@@ -202,7 +202,11 @@ pub fn c_fixes_after_preprocessor(input: &str, output: &str) {
     src = replace_identifier(src, "ftell", "spine_ftell", 0);
     src = replace_identifier(src, "fread", "spine_fread", 0);
     src = replace_identifier(src, "fclose", "spine_fclose", 0);
-    src = replace_identifier(src, "fclose", "spine_fclose", 0);
+    src = replace_identifier(src, "acosf", "spine_acosf", 0);
+    src = replace_identifier(src, "atan2f", "spine_atan2f", 0);
+    src = replace_identifier(src, "cosf", "spine_cosf", 0);
+    src = replace_identifier(src, "pow", "spine_pow", 0);
+    src = replace_identifier(src, "fmodf", "spine_fmodf", 0);
     write(output, src).unwrap();
 }
 
@@ -240,8 +244,7 @@ pub fn rust_fixes(input: &str, output: &str) {
     src = src.replace("pub type _IO_wide_data;", "");
     src = src.replace("pub type _IO_codecvt;", "");
     src = src.replace("pub type _IO_marker;", "");
-    src = src
-        + "\n
+    src += "\n
 type _IO_wide_data = u8;
 type _IO_codecvt = u8;
 type _IO_marker = u8;

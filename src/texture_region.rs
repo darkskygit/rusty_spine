@@ -6,15 +6,16 @@ use crate::{
 #[cfg(feature = "mint")]
 use mint::Vector2;
 
+/// A region of a texture, usually imported from an [`AtlasRegion`](`crate::atlas::AtlasRegion`).
 #[derive(Debug)]
 pub struct TextureRegion {
     c_texture_region: SyncPtr<spTextureRegion>,
 }
 
 impl NewFromPtr<spTextureRegion> for TextureRegion {
-    unsafe fn new_from_ptr(c_texture_region: *const spTextureRegion) -> Self {
+    unsafe fn new_from_ptr(c_texture_region: *mut spTextureRegion) -> Self {
         Self {
-            c_texture_region: SyncPtr(c_texture_region as *mut spTextureRegion),
+            c_texture_region: SyncPtr(c_texture_region),
         }
     }
 }
@@ -35,8 +36,10 @@ impl TextureRegion {
     c_ptr!(c_texture_region, spTextureRegion);
 }
 
+/// Functions available if using the `mint` feature.
 #[cfg(feature = "mint")]
 impl TextureRegion {
+    #[must_use]
     pub fn uvs(&self) -> (Vector2<f32>, Vector2<f32>) {
         (
             Vector2 {
@@ -50,6 +53,7 @@ impl TextureRegion {
         )
     }
 
+    #[must_use]
     pub fn offset(&self) -> Vector2<f32> {
         Vector2 {
             x: self.offset_x(),
@@ -57,6 +61,7 @@ impl TextureRegion {
         }
     }
 
+    #[must_use]
     pub fn size(&self) -> Vector2<i32> {
         Vector2 {
             x: self.width(),
@@ -64,6 +69,7 @@ impl TextureRegion {
         }
     }
 
+    #[must_use]
     pub fn original_size(&self) -> Vector2<i32> {
         Vector2 {
             x: self.original_width(),

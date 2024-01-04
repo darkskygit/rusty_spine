@@ -1,29 +1,47 @@
 //! Spine runtime for Rust (and wasm!) transpiled from the official C Runtime. Supports Spine 4.1.
 //!
-//! To load a [Skeleton](struct.Skeleton.html), see [SkeletonJson](struct.SkeletonJson.html) or
-//! [SkeletonBinary](struct.SkeletonBinary.html).
+//! For a very quick working example, see [`controller`].
+//!
+//! To load a [`Skeleton`], see [`SkeletonJson`] or [`SkeletonBinary`].
+//!
+//! To load textures, see [`extension::set_create_texture_cb`].
 //!
 //! To set automatic mix durations (crossfading) between animations, see
-//! [AnimationStateData](struct.AnimationStateData.html).
+//! [`AnimationStateData`].
 //!
-//! To find and manage bones, see [Bone](struct.Bone.html).
+//! To find and manage bones, see [`Bone`].
 //!
-//! To receive animation events, see [Event](struct.Event.html).
+//! To receive animation events, see [`AnimationState::set_listener`].
+
+#![deny(
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc,
+    clippy::doc_markdown,
+    clippy::manual_assert,
+    clippy::ptr_cast_constness,
+    clippy::ptr_as_ptr,
+    clippy::default_trait_access,
+    clippy::explicit_iter_loop,
+    clippy::explicit_into_iter_loop,
+    clippy::missing_const_for_fn,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::redundant_feature_names,
+    clippy::semicolon_if_nothing_returned
+)]
+// https://github.com/rust-lang/rust-clippy/issues/11382
+#![allow(clippy::arc_with_non_send_sync)]
 
 #[macro_use]
 pub mod c_interface;
 pub mod c;
+pub mod debugger;
 pub mod extension;
 
 #[cfg(feature = "draw_functions")]
+pub mod controller;
+#[cfg(feature = "draw_functions")]
 pub mod draw;
-#[cfg(feature = "draw_functions")]
-mod skeleton_controller;
-#[cfg(feature = "draw_functions")]
-pub use skeleton_controller::*;
-
-#[cfg(feature = "egui_debugger")]
-pub mod debugger;
 
 mod animation;
 mod animation_state;
@@ -31,6 +49,7 @@ mod animation_state_data;
 #[path = "atlas.rs"]
 mod atlas_mod;
 mod attachment;
+mod attachment_loader;
 mod bone;
 mod bounding_box_attachment;
 mod clipping_attachment;
@@ -57,6 +76,7 @@ pub use animation_state::*;
 pub use animation_state_data::*;
 pub use atlas_mod::{atlas, Atlas};
 pub use attachment::*;
+pub use attachment_loader::*;
 pub use bone::*;
 pub use bounding_box_attachment::*;
 pub use clipping_attachment::*;
@@ -79,4 +99,4 @@ pub use slot::*;
 pub use texture_region::*;
 
 #[cfg(test)]
-pub mod tests;
+pub mod test;

@@ -12,11 +12,9 @@ pub struct BoundingBoxAttachment {
 }
 
 impl NewFromPtr<spBoundingBoxAttachment> for BoundingBoxAttachment {
-    unsafe fn new_from_ptr(c_bounding_box_attachment: *const spBoundingBoxAttachment) -> Self {
+    unsafe fn new_from_ptr(c_bounding_box_attachment: *mut spBoundingBoxAttachment) -> Self {
         Self {
-            c_bounding_box_attachment: SyncPtr(
-                c_bounding_box_attachment as *mut spBoundingBoxAttachment,
-            ),
+            c_bounding_box_attachment: SyncPtr(c_bounding_box_attachment),
         }
     }
 }
@@ -33,6 +31,17 @@ impl BoundingBoxAttachment {
     c_attachment_accessors!();
     c_vertex_attachment_accessors!();
     #[cfg(not(feature = "spine38"))]
-    c_accessor_color!(color, color);
+    c_accessor_color!(
+        /// The color of the bounding box as it was in Spine, or a default color if nonessential
+        /// data was not exported. Bounding boxes are not usually rendered at runtime.
+        color,
+        color
+    );
     c_ptr!(c_bounding_box_attachment, spBoundingBoxAttachment);
+}
+
+/// Functions available if using the `mint` feature.
+#[cfg(feature = "mint")]
+impl BoundingBoxAttachment {
+    c_vertex_attachment_accessors_mint!();
 }

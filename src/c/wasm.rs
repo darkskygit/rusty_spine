@@ -32,7 +32,10 @@
  * SUCH DAMAGE.
  */
 
+#![allow(clippy::missing_const_for_fn)]
+
 use crate::c::FILE;
+use std::alloc::Layout;
 use std::any::Any;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
@@ -54,7 +57,7 @@ pub mod types {
     #[allow(non_camel_case_types)]
     pub type c_schar = i8;
     #[allow(non_camel_case_types)]
-    pub type c_char = i8;
+    pub type c_char = std::ffi::c_char;
     #[allow(non_camel_case_types)]
     pub type c_uchar = u8;
     #[allow(non_camel_case_types)]
@@ -76,7 +79,7 @@ type size_t = c_ulong;
 
 #[derive(Default)]
 struct Allocator {
-    allocations: HashMap<*const c_void, Vec<u8>>,
+    allocations: HashMap<*const c_void, Layout>,
 }
 
 impl Allocator {
@@ -93,36 +96,46 @@ impl Allocator {
     }
 
     pub fn malloc(&mut self, size: usize) -> *mut c_void {
-        let mut data: Vec<u8> = vec![];
-        data.resize(size, 0);
-        let ptr = data.as_ptr();
-        self.allocations.insert(ptr as *const c_void, data);
-        ptr as *mut c_void
+        if size > 0 {
+            let layout = std::alloc::Layout::array::<u8>(size)
+                .unwrap()
+                .align_to(8)
+                .unwrap();
+            let ptr = unsafe { std::alloc::alloc(layout) };
+            self.allocations.insert(ptr as *const c_void, layout);
+            ptr.cast::<c_void>()
+        } else {
+            std::ptr::null_mut()
+        }
     }
 
     pub unsafe fn realloc(&mut self, ptr: *const c_void, size: usize) -> *mut c_void {
-        let mut previous_allocation = self.allocations.remove(&ptr).unwrap();
-        previous_allocation.resize(size, 0);
-        let new_ptr = previous_allocation.as_ptr();
-        self.allocations
-            .insert(new_ptr as *const c_void, previous_allocation);
-        new_ptr as *mut c_void
+        let new_memory = self.malloc(size);
+        if !new_memory.is_null() {
+            let layout = self.allocations.get(&ptr).unwrap();
+            spine_memcpy(new_memory, ptr, layout.size() as size_t);
+        }
+        self.free(ptr);
+        new_memory
     }
 
     #[allow(dead_code)]
     pub unsafe fn size(&mut self, ptr: *const c_void) -> usize {
-        self.allocations.get(&ptr).unwrap().len()
+        self.allocations.get(&ptr).unwrap().size()
     }
 
     pub unsafe fn free(&mut self, ptr: *const c_void) {
-        self.allocations.remove(&ptr).unwrap();
+        if !ptr.is_null() {
+            let layout = self.allocations.remove(&ptr).unwrap();
+            unsafe { std::alloc::dealloc(ptr as *mut u8, layout) };
+        }
     }
 
     #[allow(dead_code)]
     pub fn size_allocated(&self) -> usize {
         let mut size = 0;
-        for (_, allocation) in self.allocations.iter() {
-            size += allocation.len();
+        for allocation in self.allocations.values() {
+            size += allocation.size();
         }
         size
     }
@@ -130,7 +143,7 @@ impl Allocator {
 
 #[no_mangle]
 pub unsafe extern "C" fn spine_isspace(c: c_int) -> c_int {
-    return if c == '\t' as i32
+    if c == '\t' as i32
         || c == '\n' as i32
         || c == '\u{b}' as i32
         || c == '\u{c}' as i32
@@ -140,30 +153,30 @@ pub unsafe extern "C" fn spine_isspace(c: c_int) -> c_int {
         1 as c_int
     } else {
         0 as c_int
-    };
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn spine_isdigit(c: c_int) -> c_int {
-    return ((c as c_uint).wrapping_sub('0' as i32 as c_uint) < 10 as c_int as c_uint) as c_int;
+    ((c as c_uint).wrapping_sub('0' as i32 as c_uint) < 10 as c_int as c_uint) as c_int
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn spine_isalpha(c: c_int) -> c_int {
-    return if c >= 'a' as i32 && c <= 'z' as i32 || c >= 'A' as i32 && c <= 'Z' as i32 {
+    if c >= 'a' as i32 && c <= 'z' as i32 || c >= 'A' as i32 && c <= 'Z' as i32 {
         1 as c_int
     } else {
         0 as c_int
-    };
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn spine_isupper(c: c_int) -> c_int {
-    return if c >= 'A' as i32 && c <= 'Z' as i32 {
+    if c >= 'A' as i32 && c <= 'Z' as i32 {
         1 as c_int
     } else {
         0 as c_int
-    };
+    }
 }
 
 #[no_mangle]
@@ -173,7 +186,7 @@ pub unsafe extern "C" fn spine_strlen(str: *const c_char) -> c_ulong {
     while *s != 0 {
         s = s.offset(1);
     }
-    return s.offset_from(str) as c_long as c_ulong;
+    s.offset_from(str) as c_long as c_ulong
 }
 
 #[no_mangle]
@@ -181,7 +194,7 @@ pub unsafe extern "C" fn spine_strcmp(mut s1: *const c_char, mut s2: *const c_ch
     loop {
         let fresh0 = s2;
         s2 = s2.offset(1);
-        if !(*s1 as c_int == *fresh0 as c_int) {
+        if *s1 as c_int != *fresh0 as c_int {
             break;
         }
         let fresh1 = s1;
@@ -191,7 +204,7 @@ pub unsafe extern "C" fn spine_strcmp(mut s1: *const c_char, mut s2: *const c_ch
         }
     }
     s2 = s2.offset(-1);
-    return *(s1 as *mut c_uchar) as c_int - *(s2 as *mut c_uchar) as c_int;
+    *(s1 as *mut c_uchar) as c_int - *(s2 as *mut c_uchar) as c_int
 }
 
 #[no_mangle]
@@ -216,11 +229,11 @@ pub unsafe extern "C" fn spine_strncmp(
             break;
         }
         n = n.wrapping_sub(1);
-        if !(n != 0 as c_int as c_ulong) {
+        if n == 0 as c_int as c_ulong {
             break;
         }
     }
-    return 0 as c_int;
+    0 as c_int
 }
 
 static mut CHARMAP: [c_uchar; 256] = [
@@ -484,12 +497,12 @@ static mut CHARMAP: [c_uchar; 256] = [
 #[no_mangle]
 pub unsafe extern "C" fn spine_strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int {
     let cm: *const c_uchar = CHARMAP.as_ptr();
-    let mut us1: *const c_uchar = s1 as *const c_uchar;
-    let mut us2: *const c_uchar = s2 as *const c_uchar;
+    let mut us1: *const c_uchar = s1.cast::<c_uchar>();
+    let mut us2: *const c_uchar = s2.cast::<c_uchar>();
     loop {
         let fresh0 = us2;
         us2 = us2.offset(1);
-        if !(*cm.offset(*us1 as isize) as c_int == *cm.offset(*fresh0 as isize) as c_int) {
+        if *cm.offset(*us1 as isize) as c_int != *cm.offset(*fresh0 as isize) as c_int {
             break;
         }
         let fresh1 = us1;
@@ -499,7 +512,7 @@ pub unsafe extern "C" fn spine_strcasecmp(s1: *const c_char, s2: *const c_char) 
         }
     }
     us2 = us2.offset(-1);
-    return *cm.offset(*us1 as isize) as c_int - *cm.offset(*us2 as isize) as c_int;
+    *cm.offset(*us1 as isize) as c_int - *cm.offset(*us2 as isize) as c_int
 }
 
 #[no_mangle]
@@ -507,13 +520,13 @@ pub unsafe extern "C" fn spine_strcpy(mut to: *mut c_char, mut from: *const c_ch
     let save: *mut c_char = to;
     loop {
         *to = *from;
-        if !(*to as c_int != '\0' as i32) {
+        if *to as c_int == '\0' as i32 {
             break;
         }
         from = from.offset(1);
         to = to.offset(1);
     }
-    return save;
+    save
 }
 
 #[no_mangle]
@@ -537,13 +550,13 @@ pub unsafe extern "C" fn spine_strncat(
             }
             d = d.offset(1);
             n = n.wrapping_sub(1);
-            if !(n != 0 as c_int as c_ulong) {
+            if n == 0 as c_int as c_ulong {
                 break;
             }
         }
         *d = 0 as c_int as c_char;
     }
-    return dst;
+    dst
 }
 
 #[no_mangle]
@@ -564,7 +577,7 @@ pub unsafe extern "C" fn spine_strtol(
         let fresh0 = s;
         s = s.offset(1);
         c = *fresh0 as c_uchar as c_int;
-        if !(spine_isspace(c) != 0) {
+        if spine_isspace(c) == 0 {
             break;
         }
     }
@@ -616,7 +629,7 @@ pub unsafe extern "C" fn spine_strtol(
         if spine_isdigit(c) != 0 {
             c -= '0' as i32;
         } else {
-            if !(spine_isalpha(c) != 0) {
+            if spine_isalpha(c) == 0 {
                 break;
             }
             c -= if spine_isupper(c) != 0 {
@@ -628,7 +641,7 @@ pub unsafe extern "C" fn spine_strtol(
         if c >= base {
             break;
         }
-        if !(any < 0 as c_int) {
+        if any >= 0 as c_int {
             if neg != 0 {
                 if acc < cutoff || acc == cutoff && c > cutlim {
                     any = -(1 as c_int);
@@ -656,9 +669,10 @@ pub unsafe extern "C" fn spine_strtol(
             s.offset(-(1 as c_int as isize))
         } else {
             nptr
-        }) as *mut c_char;
+        })
+        .cast_mut();
     }
-    return acc;
+    acc
 }
 
 #[no_mangle]
@@ -669,17 +683,17 @@ pub unsafe extern "C" fn spine_strtoul(
 ) -> c_ulong {
     let mut s: *const c_char;
     let mut acc: c_ulong;
-    let cutoff: c_ulong;
+    let cutoff: c_ulong = (18446744073709551615 as c_ulong).wrapping_div(base as c_ulong);
     let mut c: c_int;
     let neg: c_int;
     let mut any: c_int;
-    let cutlim: c_int;
+    let cutlim: c_int = (18446744073709551615 as c_ulong).wrapping_rem(base as c_ulong) as c_int;
     s = nptr;
     loop {
         let fresh0 = s;
         s = s.offset(1);
         c = *fresh0 as c_uchar as c_int;
-        if !(spine_isspace(c) != 0) {
+        if spine_isspace(c) == 0 {
             break;
         }
     }
@@ -711,15 +725,13 @@ pub unsafe extern "C" fn spine_strtoul(
             10 as c_int
         };
     }
-    cutoff = (18446744073709551615 as c_ulong).wrapping_div(base as c_ulong);
-    cutlim = (18446744073709551615 as c_ulong).wrapping_rem(base as c_ulong) as c_int;
     acc = 0 as c_int as c_ulong;
     any = 0 as c_int;
     loop {
         if spine_isdigit(c) != 0 {
             c -= '0' as i32;
         } else {
-            if !(spine_isalpha(c) != 0) {
+            if spine_isalpha(c) == 0 {
                 break;
             }
             c -= if spine_isupper(c) != 0 {
@@ -731,7 +743,7 @@ pub unsafe extern "C" fn spine_strtoul(
         if c >= base {
             break;
         }
-        if !(any < 0 as c_int) {
+        if any >= 0 as c_int {
             if acc > cutoff || acc == cutoff && c > cutlim {
                 any = -(1 as c_int);
                 acc = 18446744073709551615 as c_ulong;
@@ -753,18 +765,18 @@ pub unsafe extern "C" fn spine_strtoul(
             s.offset(-(1 as c_int as isize))
         } else {
             nptr
-        }) as *mut c_char;
+        })
+        .cast_mut();
     }
-    return acc;
+    acc
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn spine_strrchr(mut p: *const c_char, ch: c_int) -> *mut c_char {
-    let mut save: *mut c_char;
-    save = 0 as *mut c_char;
+    let mut save: *mut c_char = std::ptr::null_mut::<c_char>();
     loop {
         if *p as c_int == ch {
-            save = p as *mut c_char;
+            save = p.cast_mut();
         }
         if *p == 0 {
             return save;
@@ -774,24 +786,54 @@ pub unsafe extern "C" fn spine_strrchr(mut p: *const c_char, ch: c_int) -> *mut 
 }
 
 #[no_mangle]
-unsafe fn spine_rand() -> c_int {
+unsafe extern "C" fn spine_rand() -> c_int {
     unimplemented!();
 }
 
 #[no_mangle]
-fn spine_sqrtf(x: c_float) -> c_float {
+extern "C" fn spine_sqrtf(x: c_float) -> c_float {
     x.sqrt()
 }
 
 #[no_mangle]
-unsafe fn spine_malloc(size: size_t) -> *mut c_void {
+extern "C" fn spine_acosf(x: c_float) -> c_float {
+    x.acos()
+}
+
+#[no_mangle]
+extern "C" fn spine_atan2f(x: c_float, y: c_float) -> c_float {
+    x.atan2(y)
+}
+
+#[no_mangle]
+extern "C" fn spine_cosf(x: c_float) -> c_float {
+    x.cos()
+}
+
+#[no_mangle]
+extern "C" fn spine_sinf(x: c_float) -> c_float {
+    x.sin()
+}
+
+#[no_mangle]
+extern "C" fn spine_pow(x: c_double, y: c_double) -> c_double {
+    x.powf(y)
+}
+
+#[no_mangle]
+extern "C" fn spine_fmodf(x: c_float, y: c_float) -> c_float {
+    x % y
+}
+
+#[no_mangle]
+unsafe extern "C" fn spine_malloc(size: size_t) -> *mut c_void {
     let singleton = Allocator::singleton();
     let mut allocator = singleton.lock().unwrap();
     allocator.malloc(size as usize)
 }
 
 #[no_mangle]
-unsafe fn spine_realloc(ptr: *mut c_void, size: size_t) -> *mut c_void {
+unsafe extern "C" fn spine_realloc(ptr: *mut c_void, size: size_t) -> *mut c_void {
     if !ptr.is_null() {
         let singleton = Allocator::singleton();
         let mut allocator = singleton.lock().unwrap();
@@ -802,69 +844,81 @@ unsafe fn spine_realloc(ptr: *mut c_void, size: size_t) -> *mut c_void {
 }
 
 #[no_mangle]
-unsafe fn spine_free(ptr: *mut c_void) {
-    if !ptr.is_null() && ptr != 1 as *mut c_void {
+unsafe extern "C" fn spine_free(ptr: *mut c_void) {
+    if !ptr.is_null() && ptr as usize != 1 {
         let singleton = Allocator::singleton();
         let mut allocator = singleton.lock().unwrap();
-        allocator.free(ptr)
+        allocator.free(ptr);
     }
 }
 
 #[no_mangle]
-unsafe fn spine_memcpy(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void {
+unsafe extern "C" fn spine_memcpy(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void {
     std::ptr::copy_nonoverlapping(src, dest, n as usize);
     dest
 }
 
 #[no_mangle]
-unsafe fn spine_memmove(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void {
+unsafe extern "C" fn spine_memmove(
+    dest: *mut c_void,
+    src: *const c_void,
+    n: size_t,
+) -> *mut c_void {
     std::ptr::copy(src, dest, n as usize);
     dest
 }
 
 #[no_mangle]
-unsafe fn spine_memset(s: *mut c_void, c: c_int, n: size_t) -> *mut c_void {
+unsafe extern "C" fn spine_memset(s: *mut c_void, c: c_int, n: size_t) -> *mut c_void {
     for offset in 0..n {
-        (*(s as *mut u8).offset(offset as isize)) = c as u8;
+        (*(s.cast::<u8>()).offset(offset as isize)) = c as u8;
     }
     s
 }
 
 #[no_mangle]
-unsafe fn spine_fopen(_filename: *const c_char, _modes: *const c_char) -> *mut FILE {
+unsafe extern "C" fn spine_fopen(_filename: *const c_char, _modes: *const c_char) -> *mut FILE {
     unimplemented!();
 }
 
 #[no_mangle]
-unsafe fn spine_fclose(_stream: *mut FILE) -> c_int {
+unsafe extern "C" fn spine_fclose(_stream: *mut FILE) -> c_int {
     unimplemented!();
 }
 
 #[no_mangle]
-unsafe fn spine_fread(_ptr: *mut c_void, _size: size_t, _n: size_t, _stream: *mut FILE) -> size_t {
+unsafe extern "C" fn spine_fread(
+    _ptr: *mut c_void,
+    _size: size_t,
+    _n: size_t,
+    _stream: *mut FILE,
+) -> size_t {
     unimplemented!();
 }
 
 #[no_mangle]
-unsafe fn spine_fseek(_stream: *mut FILE, _off: c_long, _whence: c_int) -> c_int {
+unsafe extern "C" fn spine_fseek(_stream: *mut FILE, _off: c_long, _whence: c_int) -> c_int {
     unimplemented!();
 }
 
 #[no_mangle]
-unsafe fn spine_ftell(_stream: *mut FILE) -> c_long {
+unsafe extern "C" fn spine_ftell(_stream: *mut FILE) -> c_long {
     unimplemented!();
 }
 
-fn fmt(format: String, args: Vec<Box<dyn Any>>) -> String {
-    let mut new_str = "".to_owned();
+fn fmt(format: &str, args: &[Box<dyn Any>]) -> String {
+    let mut new_str = String::new();
     let mut percent = false;
     let mut index = 0;
     for char in format.chars() {
         if char == '%' {
             percent = true;
         } else if percent {
-            if let Some(arg) = args.get(index) {
-                match char {
+            args.get(index).map_or_else(
+                || {
+                    panic!("Incorrect argument count");
+                },
+                |arg| match char {
                     'i' | 'd' => {
                         if let Some(i) = arg.downcast_ref::<i32>() {
                             new_str += &format!("{}", *i);
@@ -874,14 +928,14 @@ fn fmt(format: String, args: Vec<Box<dyn Any>>) -> String {
                             panic!("Unsupported printf argument type");
                         }
                     }
-                    's' => {
-                        if let Some(s) = arg.downcast_ref::<*const c_char>() {
-                            new_str +=
-                                &format!("{}", unsafe { CStr::from_ptr(*s).to_str().unwrap() });
-                        } else {
+                    's' => arg.downcast_ref::<*const c_char>().map_or_else(
+                        || {
                             panic!("Unsupported printf argument type");
-                        }
-                    }
+                        },
+                        |s| {
+                            new_str += unsafe { CStr::from_ptr(*s).to_str().unwrap() };
+                        },
+                    ),
                     'f' => {
                         if let Some(f) = arg.downcast_ref::<f32>() {
                             new_str += &format!("{:.6}", *f);
@@ -901,12 +955,10 @@ fn fmt(format: String, args: Vec<Box<dyn Any>>) -> String {
                         }
                     }
                     _ => {
-                        panic!("Unsupported printf tag: %{}", char);
+                        panic!("Unsupported printf tag: %{char}");
                     }
-                }
-            } else {
-                panic!("Incorrect argument count");
-            }
+                },
+            );
             percent = false;
             index += 1;
         } else {
@@ -916,15 +968,14 @@ fn fmt(format: String, args: Vec<Box<dyn Any>>) -> String {
     new_str
 }
 
-#[cfg_attr(feature = "spine38", allow(dead_code))]
-pub(crate) fn printf(c_format: *const c_char, args: Vec<Box<dyn Any>>) {
+pub(crate) fn printf(c_format: *const c_char, args: &[Box<dyn Any>]) {
     let format = unsafe { CStr::from_ptr(c_format).to_str().unwrap().to_owned() };
-    print!("{}", fmt(format, args));
+    print!("{}", fmt(&format, args));
 }
 
-pub(crate) fn sprintf(c_str: *mut c_char, c_format: *const c_char, args: Vec<Box<dyn Any>>) {
+pub(crate) fn sprintf(c_str: *mut c_char, c_format: *const c_char, args: &[Box<dyn Any>]) {
     let format = unsafe { CStr::from_ptr(c_format).to_str().unwrap().to_owned() };
-    let result = fmt(format, args);
+    let result = fmt(&format, args);
     unsafe {
         let str = CString::new(result).unwrap();
         spine_strcpy(c_str, str.as_ptr());
@@ -943,10 +994,10 @@ pub(crate) fn sscanf(c_str: *const c_char, c_format: *const c_char, args: *mut c
 #[cfg_attr(feature = "spine38", allow(unused_macros))]
 macro_rules! spine_printf {
     ($format:expr) => {
-        crate::c::wasm::printf($format, vec![]);
+        crate::c::wasm::printf($format, &[]);
     };
     ($format:expr, $($arg:expr),+ $(,)? ) => {
-        crate::c::wasm::printf($format, vec![
+        crate::c::wasm::printf($format, &[
             $(Box::new($arg)),+
         ]);
     };
@@ -957,7 +1008,7 @@ macro_rules! spine_sprintf {
         crate::c::wasm::sprintf($str, $format, vec![]);
     };
     ($str:expr, $format:expr, $($arg:expr),+ $(,)? ) => {
-        crate::c::wasm::sprintf($str, $format, vec![
+        crate::c::wasm::sprintf($str, $format, &[
             $(Box::new($arg)),+
         ]);
     };
@@ -988,7 +1039,7 @@ mod tests {
         let mut allocator = Allocator::default();
         let mut allocations = vec![];
         for _ in 0..30 {
-            let data = allocator.malloc(255) as *mut u8;
+            let data = allocator.malloc(255).cast::<u8>();
             unsafe {
                 for i in 0..255 {
                     *data.offset(i) = i as u8;
@@ -1001,7 +1052,7 @@ mod tests {
             allocations.push(data);
         }
         assert_eq!(allocator.size_allocated(), 30 * 255);
-        for allocation in allocations.iter() {
+        for allocation in &allocations {
             unsafe { allocator.free(*allocation as *const super::c_void) }
         }
         assert_eq!(allocator.size_allocated(), 0);
@@ -1024,13 +1075,13 @@ mod tests {
             let mut endptr: *mut super::c_char = std::ptr::null_mut();
             let value = spine_strtol(str.as_ptr(), &mut endptr, 10);
             assert_eq!(value, 1234);
-            assert_eq!(endptr as *const super::c_char, str.as_ptr().offset(4));
+            assert_eq!(endptr.cast_const(), str.as_ptr().offset(4));
 
             let str = CString::new("hello world").unwrap();
             let mut endptr: *mut super::c_char = std::ptr::null_mut();
             let value = spine_strtol(str.as_ptr(), &mut endptr, 10);
             assert_eq!(value, 0);
-            assert_eq!(endptr as *const super::c_char, str.as_ptr().offset(0));
+            assert_eq!(endptr.cast_const(), str.as_ptr().offset(0));
         }
     }
 
@@ -1041,39 +1092,36 @@ mod tests {
             let mut endptr: *mut super::c_char = std::ptr::null_mut();
             let value = spine_strtoul(str.as_ptr(), &mut endptr, 10);
             assert_eq!(value, 1234);
-            assert_eq!(endptr as *const super::c_char, str.as_ptr().offset(4));
+            assert_eq!(endptr.cast_const(), str.as_ptr().offset(4));
 
             let str = CString::new("hello world").unwrap();
             let mut endptr: *mut super::c_char = std::ptr::null_mut();
             let value = spine_strtoul(str.as_ptr(), &mut endptr, 10);
             assert_eq!(value, 0);
-            assert_eq!(endptr as *const super::c_char, str.as_ptr().offset(0));
+            assert_eq!(endptr.cast_const(), str.as_ptr().offset(0));
         }
     }
 
     #[test]
     fn fmt() {
         assert_eq!(
-            super::fmt("integer: (%i)".to_string(), vec![Box::new(52)]),
+            super::fmt("integer: (%i)", &[Box::new(52)]),
             "integer: (52)"
         );
         assert_eq!(
-            super::fmt("integer: (%d)".to_string(), vec![Box::new(123)]),
+            super::fmt("integer: (%d)", &[Box::new(123)]),
             "integer: (123)"
         );
         assert_eq!(
-            super::fmt("float: (%f)".to_string(), vec![Box::new(3.14)]),
-            "float: (3.140000)"
+            super::fmt("float: (%f)", &[Box::new(4.14)]),
+            "float: (4.140000)"
         );
         let c_str = CString::new("hello").unwrap();
         assert_eq!(
-            super::fmt("string: (%s)".to_string(), vec![Box::new(c_str.as_ptr())]),
+            super::fmt("string: (%s)", &[Box::new(c_str.as_ptr())]),
             "string: (hello)"
         );
-        assert_eq!(
-            super::fmt("hex: (%x)".to_string(), vec![Box::new(200)]),
-            "hex: (c8)"
-        );
+        assert_eq!(super::fmt("hex: (%x)", &[Box::new(200)]), "hex: (c8)");
     }
 
     #[test]

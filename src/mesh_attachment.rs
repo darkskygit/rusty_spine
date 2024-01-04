@@ -28,29 +28,38 @@ pub struct MeshAttachment {
 }
 
 impl NewFromPtr<spMeshAttachment> for MeshAttachment {
-    unsafe fn new_from_ptr(c_mesh_attachment: *const spMeshAttachment) -> Self {
+    unsafe fn new_from_ptr(c_mesh_attachment: *mut spMeshAttachment) -> Self {
         Self {
-            c_mesh_attachment: SyncPtr(c_mesh_attachment as *mut spMeshAttachment),
+            c_mesh_attachment: SyncPtr(c_mesh_attachment),
         }
     }
 }
 
 impl MeshAttachment {
+    #[must_use]
     fn attachment(&self) -> &spAttachment {
         unsafe { &self.c_ptr_ref().super_0.super_0 }
     }
 
+    #[must_use]
     fn vertex_attachment(&self) -> &spVertexAttachment {
         unsafe { &self.c_ptr_ref().super_0 }
     }
 
-    pub unsafe fn new_linked_mesh(&self) -> Attachment {
-        Attachment::new_from_ptr(spMeshAttachment_newLinkedMesh(self.c_ptr()) as *const spAttachment)
+    #[must_use]
+    pub fn new_linked_mesh(&self) -> Attachment {
+        unsafe {
+            Attachment::new_from_ptr(
+                spMeshAttachment_newLinkedMesh(self.c_ptr()).cast::<spAttachment>(),
+            )
+        }
     }
 
     #[cfg(not(feature = "spine38"))]
-    pub unsafe fn update_region(&mut self) {
-        spMeshAttachment_updateRegion(self.c_ptr());
+    pub fn update_region(&mut self) {
+        unsafe {
+            spMeshAttachment_updateRegion(self.c_ptr());
+        }
     }
 
     #[cfg(feature = "spine38")]
@@ -67,8 +76,8 @@ impl MeshAttachment {
     c_accessor!(height, height, f32);
     c_accessor_renderer_object!();
     #[cfg(not(feature = "spine38"))]
-    c_accessor_tmp_ptr_optional!(region, region_mut, region, TextureRegion, spTextureRegion);
-    c_accessor_tmp_ptr!(
+    c_accessor_tmp_ptr_optional_mut!(region, region_mut, region, TextureRegion, spTextureRegion);
+    c_accessor_tmp_ptr_mut!(
         parent_mesh,
         parent_mesh_mut,
         parentMesh,
@@ -77,7 +86,7 @@ impl MeshAttachment {
     );
     c_accessor!(triangles_count, trianglesCount, i32);
     c_accessor_passthrough!(triangles, triangles, *mut c_ushort);
-    c_accessor!(edges_count, edgesCount, i32);
+    c_accessor!(edges_count, edgesCount, usize);
     c_accessor_passthrough!(edges, edges, *mut i32);
     c_accessor_passthrough!(uvs, uvs, *mut c_float);
     c_accessor_passthrough!(region_uvs, regionUVs, *mut c_float);
@@ -85,12 +94,16 @@ impl MeshAttachment {
     // TODO: sequence accessor
 }
 
+/// Functions available if using the `mint` feature.
 #[cfg(feature = "mint")]
 impl MeshAttachment {
+    #[must_use]
     pub fn size(&self) -> Vector2<f32> {
         Vector2 {
             x: self.width(),
             y: self.height(),
         }
     }
+
+    c_vertex_attachment_accessors_mint!();
 }
