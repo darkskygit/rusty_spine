@@ -170,7 +170,7 @@ where
             let item = unsafe { T::new_from_ptr(*self.items.offset(self.index as isize)) };
             self.index += 1;
             Some(CTmpMut::new(
-                unsafe { &mut *(self._parent as *const P as *mut P) },
+                unsafe { &mut *(&mut self._parent as *mut &'a P).cast::<P>() },
                 item,
             ))
         } else {
@@ -241,7 +241,7 @@ where
                 let item = unsafe { T::new_from_ptr(ptr) };
                 self.index += 1;
                 Some(Some(CTmpMut::new(
-                    unsafe { &mut *(self._parent as *const P as *mut P) },
+                    unsafe { &mut *(&mut self._parent as *mut &'a P).cast::<P>() },
                     item,
                 )))
             } else {
@@ -425,7 +425,8 @@ macro_rules! c_accessor_color_mut {
         c_accessor_color!($rust, $c);
         pub fn $rust_mut(&mut self) -> &mut crate::color::Color {
             unsafe {
-                &mut *(&self.c_ptr_mut().$c as *const crate::c::spColor as *mut crate::color::Color)
+                &mut *(&mut self.c_ptr_mut().$c as *mut crate::c::spColor)
+                    .cast::<crate::color::Color>()
             }
         }
     };
@@ -528,7 +529,7 @@ macro_rules! c_accessor_tmp_ptr_optional {
     };
 }
 
-#[cfg_attr(feature="spine38", allow(unused_macros))]
+#[cfg_attr(feature = "spine38", allow(unused_macros))]
 macro_rules! c_accessor_super {
     ($rust:ident, $rust_mut:ident, $type:ty, $c_type:ident) => {
         pub fn $rust(&self) -> crate::c_interface::CTmpRef<Self, $type> {

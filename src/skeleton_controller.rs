@@ -121,15 +121,15 @@ pub struct SkeletonRenderable {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::test_spineboy_instance_data;
+    use crate::SkeletonController;
     use std::env;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};
-    use crate::SkeletonController;
-    use crate::tests::test_spineboy_instance_data;
 
     #[test]
     fn test_generated_data_skeletoncontroller() {
-        let reference_filename = if cfg!(feature="spine38") {
+        let reference_filename = if cfg!(feature = "spine38") {
             "assets/test-reference-files/simple_drawer.spineboy_spine38"
         } else {
             "assets/test-reference-files/simple_drawer.spineboy_spine41"
@@ -157,9 +157,12 @@ mod tests {
         controller: &mut SkeletonController,
         animation_name: &str,
         delta_seconds: f32,
-        frame_count: i32
+        frame_count: i32,
     ) -> std::io::Result<Vec<u8>> {
-        controller.animation_state.set_animation_by_name(0, animation_name, true).unwrap();
+        controller
+            .animation_state
+            .set_animation_by_name(0, animation_name, true)
+            .unwrap();
 
         let mut d = Vec::new();
 
@@ -168,15 +171,34 @@ mod tests {
                 write!(d, "frame {} slot {}", frame, renderable.slot_index)?;
                 write!(d, " blend={}", renderable.blend_mode as i32)?;
                 write!(d, " pma={}", renderable.premultiplied_alpha)?;
-                write!(d, " color=({:.4},{:.4},{:.4},{:.4})", renderable.color.r, renderable.color.g, renderable.color.b, renderable.color.a)?;
-                write!(d, " dark=({:.4},{:.4},{:.4},{:.4})", renderable.dark_color.r, renderable.dark_color.g, renderable.dark_color.b, renderable.dark_color.a)?;
+                write!(
+                    d,
+                    " color=({:.4},{:.4},{:.4},{:.4})",
+                    renderable.color.r, renderable.color.g, renderable.color.b, renderable.color.a
+                )?;
+                write!(
+                    d,
+                    " dark=({:.4},{:.4},{:.4},{:.4})",
+                    renderable.dark_color.r,
+                    renderable.dark_color.g,
+                    renderable.dark_color.b,
+                    renderable.dark_color.a
+                )?;
 
-                write!(d, "\nframe {} slot {} indices", frame, renderable.slot_index)?;
+                write!(
+                    d,
+                    "\nframe {} slot {} indices",
+                    frame, renderable.slot_index
+                )?;
                 for index in renderable.indices {
                     write!(d, " {}", index)?;
                 }
 
-                write!(d, "\nframe {} slot {} vertices", frame, renderable.slot_index)?;
+                write!(
+                    d,
+                    "\nframe {} slot {} vertices",
+                    frame, renderable.slot_index
+                )?;
                 for vertex in renderable.vertices {
                     write!(d, " {:.0} {:.0}", vertex[0], vertex[1])?;
                 }

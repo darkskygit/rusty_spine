@@ -153,7 +153,7 @@ pub fn egui_spine_debugger(
                                 let track_count = animation_state.tracks_count();
                                 animation_state.set_empty_animation(track_count, 0.);
                                 commands.push(Command::SetEmptyAnimation {
-                                    track_index: track_count,
+                                    track_index: track_count as i32,
                                 });
                             }
                         });
@@ -214,14 +214,14 @@ pub fn egui_spine_debugger(
                 match command {
                     Command::SetAnimationByName { track_index, name } => {
                         animation_state
-                            .set_animation_by_name(track_index, &name, true)
+                            .set_animation_by_name(track_index as usize, &name, true)
                             .unwrap();
                     }
                     Command::SetEmptyAnimation { track_index } => {
-                        animation_state.set_empty_animation(track_index, 0.);
+                        animation_state.set_empty_animation(track_index as usize, 0.);
                     }
                     Command::ClearTrack { track_index } => {
-                        animation_state.clear_track(track_index);
+                        animation_state.clear_track(track_index as usize);
                     }
                     Command::SetToSetupPose => {
                         skeleton.set_to_setup_pose();
@@ -231,7 +231,7 @@ pub fn egui_spine_debugger(
                         attachment,
                     } => unsafe {
                         skeleton
-                            .slot_at_index_mut(slot_index)
+                            .slot_at_index_mut(slot_index as usize)
                             .unwrap()
                             .set_attachment(attachment);
                     },
@@ -358,7 +358,7 @@ fn egui_draw_slots(
                                     egui_slot_dropdown(ui, *slot_handle, skeleton)
                                 {
                                     commands.push(Command::SetAttachment {
-                                        slot_index: slot.data().index(),
+                                        slot_index: slot.data().index() as i32,
                                         attachment,
                                     });
                                 }
@@ -385,7 +385,7 @@ fn egui_draw_slots(
                             if let Some(attachment) = egui_slot_dropdown(ui, *slot_handle, skeleton)
                             {
                                 commands.push(Command::SetAttachment {
-                                    slot_index: slot.data().index(),
+                                    slot_index: slot.data().index() as i32,
                                     attachment,
                                 });
                             }
@@ -443,7 +443,7 @@ fn egui_slot_dropdown(
         let mut attachments = vec![];
         if let Some(skin) = skin_handle.get(&skeleton.data()) {
             for attachment_entry in skin.attachments() {
-                if attachment_entry.slot_index == slot.data().index() {
+                if attachment_entry.slot_index == slot.data().index() as i32 {
                     attachments.push(attachment_entry.attachment);
                 }
             }
